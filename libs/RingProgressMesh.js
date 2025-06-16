@@ -1,76 +1,86 @@
-import { Mesh, PlaneBufferGeometry, ShaderMaterial, Clock } from './three/three.module.js';
+import { Mesh, PlaneBufferGeometry, ShaderMaterial } from './three/three.module.js';
 
 const vshader = `
 varying vec2 vUv;
-void main() {
+void main() {	
   vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 }
-`;
-
+`
 const fshader = `
-#define PI 3.14159265359
-#define TAU 6.28318530718
+#define PI2 6.28318530718
 
-uniform float uTime;
+uniform float uProgress;
+
 varying vec2 vUv;
 
-// Hexagon shape
-float hexagon(vec2 p, float r) {
-  p = abs(p);
-  return max(dot(p, normalize(vec2(1.0, sqrt(3.0)))), p.x) - r;
+float circle(vec2 pt, vec2 center, float radius){
+  pt -= center;
+  float len = length(pt);
+  return (len<radius) ? 1.0 : 0.0;
 }
 
-// Get angle around center
-float getAngle(vec2 p) {
-  return mod(atan(p.y, p.x) + TAU, TAU);
-}
+float arc(vec2 pt, vec2 center, float radius, float percent){
+  float result = 0.0;
 
-void main() {
-  vec2 uv = vUv - 0.5;
-  float t = uTime;
+  vec2 d = pt - center;
+  float len = length(d);
+  float halfRadius = radius * 0.5;
 
-  // Hexagon ring edge and thickness
-  float edge = hexagon(uv, 0.4);
-  float thickness = 0.03;
-  float glow = smoothstep(thickness, 0.0, abs(edge));
+  if ( len<radius && len>halfRadius){
+    percent = clamp(percent, 0.0, 1.0);
+    float arcAngle = PI2 * percent;
 
-  // Calculate angle and animate rotation
-  float angle = getAngle(uv) + t * 1.5;
-  float segment = floor(angle / (TAU / 6.0)); // 6 segments
-
-  // Neon colors: red and blue alternating
-  vec3 redNeon = vec3(1.0, 0.0, 0.2);
-  vec3 blueNeon = vec3(0.0, 0.5, 1.0);
-  vec3 color = mod(segment, 2.0) < 1.0 ? redNeon : blueNeon;
-
-  gl_FragColor = vec4(color, glow);
-}
-`;
-
-class RingProgressMesh extends Mesh {
-  constructor(scale = 1) {
-    super();
-
-    this.clock = new Clock();
-
-    this.material = new ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0.0 },
-      },
-      vertexShader: vshader,
-      fragmentShader: fshader,
-      transparent: true,
-    });
-
-    this.geometry.dispose();
-    this.geometry = new PlaneBufferGeometry();
-    this.scale.set(scale, scale, scale);
+    float angle = mod( arcAngle - atan(d.y, d.x), PI2);
+    float edgeWidth = radius * 0.05;
+    result = (angle<arcAngle) ? smoothstep(halfRadius, halfRadius + edgeWidth, len) - smoothstep(radius-edgeWidth, radius, len) : 0.0;
   }
 
-  update() {
-    this.material.uniforms.uTime.value = this.clock.getElapsedTime();
-  }
+  return result;
+}
+
+void main (void)
+{
+  vec4 bgColor = vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 arcColor = vec4(1.0);
+  vec2 center = vec2(0.5);
+  vec4 color = vec4(0.0);
+  color += circle(vUv, center, 0.5) * bgColor;
+  color += arc(vUv, center, 0.4, uProgress) * arcColor;
+  gl_FragColor = color; 
+}`
+
+class RingProgressMesh extends Mesh{
+    constructor( scale = 1 ){
+        super();
+        
+        const uniforms = {
+          uProgress: { value: 0.0 },
+        }
+
+        this.material = new ShaderMaterial( {
+          uniforms: uniforms,
+          vertexShader: vshader,
+          fragmentShader: fshader,
+          alphaTest: 0.5,
+          transparent: true
+        } );
+        
+        this.geometry.dispose();
+        this.geometry = new PlaneBufferGeometry();
+        this.scale.set( scale, scale, scale );
+        this.progress = 1;
+    }
+    
+    set progress( value ){
+        if ( value<0 ) value = 0;
+        if ( value>1 ) value = 1;
+        this.material.uniforms.uProgress.value = value;
+    }
+    
+    get progress(){
+        return this.material.uniforms.uProgress.value;
+    }
 }
 
 export { RingProgressMesh };
