@@ -30,21 +30,26 @@ void main() {
   vec2 uv = vUv - 0.5;
   float t = uTime;
 
+  // Make hexagon thicker by scaling UV
+  uv *= 1.8;
+
   // Hexagon ring edge and thickness
-  float edge = hexagon(uv, 0.4);
-  float thickness = 0.03;
-  float glow = smoothstep(thickness, 0.0, abs(edge));
+  float outer = hexagon(uv, 0.5);
+  float inner = hexagon(uv, 0.35);
+  float ring = smoothstep(0.02, 0.0, abs(outer)) * (1.0 - smoothstep(0.02, 0.0, abs(inner)));
 
-  // Calculate angle and animate rotation
-  float angle = getAngle(uv) + t * 1.5;
+  // Neon glow using inverse edge distance
+  float glow = 0.04 / (abs(outer) + 0.005) + 0.02 / (abs(inner) + 0.005);
+
+  // Alternating segment colors
+  float angle = getAngle(uv) + t * 2.0; // spin animation
   float segment = floor(angle / (TAU / 6.0)); // 6 segments
-
-  // Neon colors: red and blue alternating
-  vec3 redNeon = vec3(1.0, 0.0, 0.2);
-  vec3 blueNeon = vec3(0.0, 0.5, 1.0);
+  vec3 redNeon = vec3(1.0, 0.0, 0.3);
+  vec3 blueNeon = vec3(0.0, 0.6, 1.0);
   vec3 color = mod(segment, 2.0) < 1.0 ? redNeon : blueNeon;
 
-  gl_FragColor = vec4(color, glow);
+  // Apply color with glow and ring mask
+  gl_FragColor = vec4(color * (ring + glow), ring + glow);
 }
 `;
 
@@ -69,7 +74,9 @@ class RingProgressMesh extends Mesh {
   }
 
   update() {
-    this.material.uniforms.uTime.value = this.clock.getElapsedTime();
+    const elapsed = this.clock.getElapsedTime();
+    this.material.uniforms.uTime.value = elapsed;
+    this.rotation.z = elapsed * 1.2; // spinning the mesh
   }
 }
 
